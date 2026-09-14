@@ -1,79 +1,64 @@
-# camera-kit-scanner-reproducer
+# Camera Kit Android scanner ownership reproduction
 
-![Build](https://github.com/zack-dev-cm/camera-kit-scanner-reproducer/workflows/Pre%20Merge%20Checks/badge.svg)
+Reproducer for [teslamotors/react-native-camera-kit#811](https://github.com/teslamotors/react-native-camera-kit/issues/811).
+Based on the required [React Native reproducer template](https://github.com/react-native-community/reproducer-react-native).
+The app is pinned to that template's React Native 0.81.0 revision
+[`e23019c`](https://github.com/react-native-community/reproducer-react-native/commit/e23019c91a8dce5502bf233012c28ae30e2bf03a),
+matching Camera Kit's example, and installs the published `react-native-camera-kit@18.0.1`.
 
-This is your new React Native Reproducer project.
+Clone the standard-template reproducer:
 
-# Reproducer TODO list
-
-- [x] 1. Create a new reproducer project.
-- [ ] 2. Git clone your repository locally.
-- [ ] 3. Edit the project to reproduce the failure you're seeing.
-- [ ] 4. Push your changes, so that Github Actions can run the CI.
-- [ ] 5. Make sure the repository is public and share the link with the issue you reported.
-
-# How to use this Reproducer
-
-This project has been created with `npx @react-native-community/cli init` and is a vanilla React Native app.
-
-> [!IMPORTANT]  
-> Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/set-up-your-environment) so that you have a working environment locally.
-
-## Step 1: Start the Metro Server
-
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
-
-To start Metro, run the following command from the _root_ of your React Native project:
-
-```bash
-# using npm
-npm start
-
-# OR using Yarn
-yarn start
+```sh
+git clone https://github.com/zack-dev-cm/camera-kit-scanner-reproducer.git
+cd camera-kit-scanner-reproducer
 ```
 
-## Step 2: Start your Application
+## Deterministic reproduction
 
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
+Use Node 22, Yarn 1.22.22, JDK 17, Python 3 and an Android SDK:
 
-### For Android
+```sh
+cd ReproducerApp
+yarn install --frozen-lockfile --ignore-scripts
+cd ..
+python3 reproduction/reproduce.py
+```
 
-```bash
-# using npm
-npm run android
+The script first checks SHA-256 hashes of the three exercised production classes
+against upstream `a2a81cee8995c831aca472836e2be446994ba070`. It adds only test
+configuration and a regression class to the installed package, then requires
+these three failures and four passing controls (seven tests, zero skips):
 
-# OR using Yarn
+- Three frames create three scanners where one owned scanner is expected.
+- A synchronous exception from the second image consumer leaves the image open
+  after the first task finishes.
+- A synchronous exception from the first consumer prevents the second from
+  running and leaves the image open.
+
+The regression compiles and invokes the real `CKCamera`/`QRCodeAnalyzer` code
+under Robolectric. Scanner factories and asynchronous task completion are
+controlled at the ML Kit boundary. This is not a translated model of the
+implementation and is not a physical-device memory or battery measurement.
+The script succeeds only when the expected native failures are observed;
+setup/compiler failures do not count as reproduction. Raw Gradle logs, JUnit
+XML and source hashes are written to `evidence/`.
+
+## Minimal app
+
+```sh
+cd ReproducerApp
+yarn start
+# In a second terminal:
 yarn android
 ```
 
-### For iOS
+Tap **Mount barcode camera**, allow camera access, show an authored QR code, and
+then tap **Unmount camera**. Repeat as needed. The app shows actual barcode
+callback counts; it does not infer scanner allocations from callback counts.
+Use the native regression above to assert allocation and shared-image ownership.
 
-First, make sure you install dependencies with:
+This Android-only bug reproducer does not claim an iOS test. The independently
+corrected source branch and its Android/iOS compatibility evidence are linked
+from the upstream PR. No production correction is included in this repository.
 
-```bash
-cd ios && bundle install && bundle exec pod install
-```
-
-Then you can run the iOS app with:
-
-```bash
-# using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
-
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
-
-## Step 3: Modifying your App
-
-Now that you have successfully run the app, let's modify it.
-
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
-
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
+Prepared with AI assistance; the template's MIT license is retained.
